@@ -35,9 +35,8 @@ function load() {
 
       const svg = d3.select('.canvas');
 
-      svg.selectAll('circle').remove();
-      svg.selectAll('g').remove();
-      d3.selectAll('.legend').remove();
+      const nodesToRemove = ['circle', 'g', '.legend', '.score-axis-title'];
+      nodesToRemove.forEach(node => d3.selectAll(node).remove());
 
       // Axes.
       svg
@@ -48,9 +47,12 @@ function load() {
         .append('g')
         .attr('transform', `translate(${padding}, 0)`)
         .call(scoreAxis);
-
+      d3.select('body')
+        .append('text')
+        .attr('class', 'score-axis-title')
+        .text('Best time (min:sec)');
       // Circles.
-      svg
+      const circles = svg
         .selectAll('circle')
         .data(cyclistData)
         .enter()
@@ -59,7 +61,7 @@ function load() {
         .attr('cy', cyclist => scoreScale(cyclist.Time))
         .attr('r', 5)
         .attr('class', cyclist => `circle ${cyclist.Doping ? 'red' : 'green'}`)
-        .style('fill', cyclist => (cyclist.Doping ? 'red' : 'green'));
+        .style('fill', cyclist => (cyclist.Doping ? 'red' : 'green'))
 
       // Legend.
 
@@ -89,9 +91,6 @@ function load() {
         .on('click', event => {
           const dopingCategory = document.querySelector('.doping'),
             noDopingCategory = document.querySelector('.no-doping');
-          // Toggle the correspinding .category div's inactive class.
-          // Edit the CSS so that categories with the inactive class have a faded out text.
-          // Then, toggle all of the corresponding circles' 'hide' class.
           if (event.path.includes(dopingCategory)) {
             dopingCategory.classList.toggle('inactive');
             document
@@ -118,6 +117,68 @@ function load() {
         .append('div')
         .attr('class', 'text')
         .text(item => item.text);
+
+      // Tooltip.
+
+      const tooltip = document.querySelector('.tooltip');
+      let tooltipWidth, tooltipHeight, hideTooltip;
+      circles.on('mouseover', event => {
+        clearTimeout(hideTooltip);
+        tooltip.classList.remove('hide');
+        // In order to make this less jittery, the circle's coordinates are used instead of the mouse's.
+        const { left: circleLeft, top: circleTop } =
+            event.target.getBoundingClientRect(),
+          { Doping, Name, Nationality, Place, Year, Time } =
+            event.target.__data__;
+
+        let dopingHTML = Doping ? `<br><br>${Doping}` : '';
+        tooltip.innerHTML =
+          `${Name}, ${Nationality}, #${Place}<br>${Year.getFullYear()}, ${scoreFormat(
+            Time
+          )}` + dopingHTML;
+        // The innerHTML is what determines w/h, so set these AFTER innerHTML is set.
+        tooltipWidth = tooltip.clientWidth;
+        tooltipHeight = tooltip.clientHeight;
+
+        tooltip.style.top = `${
+          Time.getMinutes() < 38 ? circleTop + 10 : circleTop - tooltipHeight
+        }px`;
+        tooltip.style.left = `${
+          Year.getFullYear() < 2005 ? circleLeft : circleLeft - tooltipWidth
+        }px`;
+
+        const keyframes = [
+            {
+              opacity: 0,
+            },
+            {
+              opacity: 1,
+            },
+          ],
+          options = {
+            duration: 300,
+            fill: 'forwards',
+          };
+
+        tooltip.animate(keyframes, options);
+      });
+      circles.on('mouseout', () => {
+        const keyframes = [
+            {
+              opacity: 1,
+            },
+            {
+              opacity: 0,
+            },
+          ],
+          options = {
+            duration: 300,
+            fill: 'forwards',
+          };
+
+        tooltip.animate(keyframes, options);
+        hideTooltip = setTimeout(() => tooltip.classList.add('hide'), 300);
+      });
     })
     .catch(err => console.error(err));
 }
